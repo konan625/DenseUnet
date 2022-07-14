@@ -33,14 +33,14 @@ import denseUnet
 from metrics import dice_coef, batch_iou, mean_iou, iou_score ,ppv,sensitivity
 import losses
 from utils import str2bool, count_params
-from sklearn.externals import joblib
+import joblib
 from hausdorff import hausdorff_distance
 import imageio
 
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--name', default=None,
+    parser.add_argument('--name', default="jiu0Monkey_Dense_Unet_woDS",
                         help='model name')
     parser.add_argument('--mode', default=None,
                         help='GetPicture or Calculate')
@@ -53,7 +53,8 @@ def parse_args():
 def main():
     val_args = parse_args()
 
-    args = joblib.load('models/%s/args.pkl' %val_args.name)
+    args = joblib.load('models/%s/args.pkl'%val_args.name)
+    
 
     if not os.path.exists('output/%s' %args.name):
         os.makedirs('output/%s' %args.name)
@@ -69,11 +70,11 @@ def main():
     print("=> creating model %s" %args.arch)
     model = denseUnet.__dict__[args.arch](args)
 
-    model = model.cuda()
+    # model = model.cuda()
 
     # Data loading code
-    img_paths = glob(r'D:\Project\CollegeDesign\dataset\Brats2018FoulModel2D\testImage\*')
-    mask_paths = glob(r'D:\Project\CollegeDesign\dataset\Brats2018FoulModel2D\testMask\*')
+    img_paths = glob(r'C:\Users\NIT\Desktop\DenseUnet_BraTs\BraTS2Dpreprocessing\testImage\*')
+    mask_paths = glob(r'C:\Users\NIT\Desktop\DenseUnet_BraTs\BraTS2Dpreprocessing\testMask\*')
 
     val_img_paths = img_paths
     val_mask_paths = mask_paths
@@ -102,8 +103,8 @@ def main():
 
             with torch.no_grad():
                 for i, (input, target) in tqdm(enumerate(val_loader), total=len(val_loader)):
-                    input = input.cuda()
-                    #target = target.cuda()
+                    # input = input.cuda()
+                    # #target = target.cuda()
 
                     # compute output
                     if args.deepsupervision:
@@ -156,7 +157,7 @@ def main():
                                     rgbPic[idx, idy, 2] = 0
                         imsave('output/%s/'%args.name + rgbName,rgbPic)
 
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
         """
         将验证集中的GT numpy格式转换成图片格式并保存
         """
@@ -330,6 +331,8 @@ def main():
         print('TC Hausdorff: %.4f' % np.mean(tc_Hausdorf))
         print('ET Hausdorff: %.4f' % np.mean(et_Hausdorf))
         print("=============")
+
+
 
 
 if __name__ == '__main__':

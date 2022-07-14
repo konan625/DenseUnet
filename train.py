@@ -14,7 +14,7 @@ import numpy as np
 from tqdm import tqdm
 
 from sklearn.model_selection import train_test_split
-from sklearn.externals import joblib
+import joblib
 from skimage.io import imread
 
 import torch
@@ -30,7 +30,7 @@ from torchvision import datasets, models, transforms
 
 from dataset import Dataset
 
-from metrics import dice_coef, batch_iou, mean_iou, iou_score
+from metrics import dice_coef, batch_iou, mean_iou, iou_score, accuracy
 import losses
 from utils import str2bool, count_params
 import pandas as pd
@@ -111,12 +111,15 @@ class AverageMeter(object):
 def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None):
     losses = AverageMeter()
     ious = AverageMeter()
-
+    accuracies = AverageMeter()
     model.train()
-
+    
+    print('test')
     for i, (input, target) in tqdm(enumerate(train_loader), total=len(train_loader)):
-        input = input.cuda()
-        target = target.cuda()
+        #input = input.cuda()
+        #target = target.cuda()
+        # input = input.astype(np.float64)
+        # target = target.astype(np.float64)
 
         # compute output
         if args.deepsupervision:
@@ -126,13 +129,18 @@ def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None
                 loss += criterion(output, target)
             loss /= len(outputs)
             iou = iou_score(outputs[-1], target)
+            acc = accuracy(outputs[-1],target)
+            
+
         else:
             output = model(input)
             loss = criterion(output, target)
             iou = iou_score(output, target)
+            acc = accuracy(output,target)
 
         losses.update(loss.item(), input.size(0))
         ious.update(iou, input.size(0))
+        accuracies.update(acc,input.size(0))
 
         # compute gradient and do optimizing step
         optimizer.zero_grad()
@@ -142,6 +150,7 @@ def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None
     log = OrderedDict([
         ('loss', losses.avg),
         ('iou', ious.avg),
+        ('accuracy',accuracies.avg)
     ])
 
     return log
@@ -150,14 +159,17 @@ def train(args, train_loader, model, criterion, optimizer, epoch, scheduler=None
 def validate(args, val_loader, model, criterion):
     losses = AverageMeter()
     ious = AverageMeter()
+    accuracies = AverageMeter()
 
     # switch to evaluate mode
     model.eval()
 
     with torch.no_grad():
         for i, (input, target) in tqdm(enumerate(val_loader), total=len(val_loader)):
-            input = input.cuda()
-            target = target.cuda()
+            # input = input.astype(np.float32)
+            # target = target.astype(np.float32)
+            # input = input.cuda()
+            # target = target.cuda()
 
             # compute output
             if args.deepsupervision:
@@ -167,17 +179,22 @@ def validate(args, val_loader, model, criterion):
                     loss += criterion(output, target)
                 loss /= len(outputs)
                 iou = iou_score(outputs[-1], target)
+                acc = accuracy(outputs[-1], target)
             else:
                 output = model(input)
                 loss = criterion(output, target)
                 iou = iou_score(output, target)
+                acc = accuracy(output, target)
 
             losses.update(loss.item(), input.size(0))
             ious.update(iou, input.size(0))
+            accuracies.update(acc, input.size(0))
+            
 
     log = OrderedDict([
         ('loss', losses.avg),
         ('iou', ious.avg),
+        ('accuracy', accuracies.avg)
     ])
 
     return log
@@ -209,27 +226,26 @@ def main():
 
     # define loss function (criterion)
     if args.loss == 'BCEWithLogitsLoss':
-        criterion = nn.BCEWithLogitsLoss().cuda()
+        criterion = nn.BCEWithLogitsLoss()
     else:
-        criterion = losses.__dict__[args.loss]().cuda()
+        criterion = losses.__dict__[args.loss]()
 
     cudnn.benchmark = True
 
     # Data loading code
-    img_paths = glob(r'D:\Project\CollegeDesign\dataset\Brats2018FoulModel2D\trainImage\*')
-    mask_paths = glob(r'D:\Project\CollegeDesign\dataset\Brats2018FoulModel2D\trainMask\*')
+    img_paths = glob(r'C:\Users\NIT\Desktop\DenseUnet_BraTs\BraTS2Dpreprocessing\trainImage\*')
+    mask_paths = glob(r'C:\Users\NIT\Desktop\DenseUnet_BraTs\BraTS2Dpreprocessing\trainMask\*')
 
     train_img_paths, val_img_paths, train_mask_paths, val_mask_paths = \
         train_test_split(img_paths, mask_paths, test_size=0.2, random_state=41)
     print("train_num:%s"%str(len(train_img_paths)))
     print("val_num:%s"%str(len(val_img_paths)))
 
-
     # create model
     print("=> creating model %s" %args.arch)
     model = denseUnet.__dict__[args.arch](args)
 
-    model = model.cuda()
+    #model = model.cuda()
 
     print(count_params(model))
 
@@ -256,7 +272,7 @@ def main():
         drop_last=False)
 
     log = pd.DataFrame(index=[], columns=[
-        'epoch', 'lr', 'loss', 'iou', 'val_loss', 'val_iou'
+        'epoch', 'lr', 'loss', 'iou', 'val_loss', 'val_iou','accuracy'
     ])
 
     best_iou = 0
@@ -269,8 +285,8 @@ def main():
         # evaluate on validation set
         val_log = validate(args, val_loader, model, criterion)
 
-        print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f'
-            %(train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou']))
+        print('loss %.4f - iou %.4f - val_loss %.4f - val_iou %.4f accuracy: %.4f'
+            %(train_log['loss'], train_log['iou'], val_log['loss'], val_log['iou'],val_log['accuracy']))
 
         tmp = pd.Series([
             epoch,
@@ -279,7 +295,9 @@ def main():
             train_log['iou'],
             val_log['loss'],
             val_log['iou'],
-        ], index=['epoch', 'lr', 'loss', 'iou', 'val_loss', 'val_iou'])
+            val_log['accuracy']
+            
+        ], index=['epoch', 'lr', 'loss', 'iou', 'val_loss', 'val_iou','accuracy'])
 
         log = log.append(tmp, ignore_index=True)
         log.to_csv('models/%s/log.csv' %args.name, index=False)
@@ -298,7 +316,7 @@ def main():
                 print("=> early stopping")
                 break
 
-        torch.cuda.empty_cache()
+        # torch.empty_cache()
 
 
 

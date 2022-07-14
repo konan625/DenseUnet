@@ -1,5 +1,4 @@
 import numpy as np
-import cv2 #https://www.jianshu.com/p/f2e88197e81d
 import random
 
 from skimage.io import imread
@@ -47,33 +46,8 @@ class Dataset(torch.utils.data.Dataset):
         nplabel[:, :, 2] = ET_Label
         nplabel = nplabel.transpose((2, 0, 1))
 
-        nplabel = nplabel.astype("float32")
+        nplabel = nplabel.astype("float64")
         npimage = npimage.astype("float32")
 
         return npimage,nplabel
-
-
-        #读图片（如jpg、png）的代码
-        '''
-        image = imread(img_path)
-        mask = imread(mask_path)
-
-        image = image.astype('float32') / 255
-        mask = mask.astype('float32') / 255
-
-        if self.aug:
-            if random.uniform(0, 1) > 0.5:
-                image = image[:, ::-1, :].copy()
-                mask = mask[:, ::-1].copy()
-            if random.uniform(0, 1) > 0.5:
-                image = image[::-1, :, :].copy()
-                mask = mask[::-1, :].copy()
-
-        image = color.gray2rgb(image)
-        #image = image[:,:,np.newaxis]
-        image = image.transpose((2, 0, 1))
-        mask = mask[:,:,np.newaxis]
-        mask = mask.transpose((2, 0, 1))       
-        return image, mask
-        '''
 
